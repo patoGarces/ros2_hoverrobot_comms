@@ -92,8 +92,12 @@ if __name__ == "__main__":
     hoverRobotComms = HoverRobotComms(SERVER_IP, SERVER_PORT, RECONNECT_DELAY)
 
     while(True):
+        print('esperando conexion')
+        while(not hoverRobotComms.isRobotConnected()):
+            time.sleep(1)
+
         print('esperando status stabilized')
-        while(hoverRobotComms.getRobotStatus() != RobotStatusCode.STATUS_ROBOT_STABILIZED):
+        while(hoverRobotComms.getRobotStatus() != RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
             time.sleep(1)
 
         print('esperando estabilizar todo')
@@ -102,25 +106,30 @@ if __name__ == "__main__":
             # hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 3)
             # hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, -4500)
 
-            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 50)
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 100)
             time.sleep(2)
             hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, 9000)
             time.sleep(2)
 
-            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 50)
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 100)
             time.sleep(2)
             hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, 9000)
             time.sleep(2)
 
-            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 50)
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 100)
+            time.sleep(5)
+
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, -100)
             time.sleep(2)
-            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, 9000)
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, -9000)
             time.sleep(2)
 
-            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 50)
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, -100)
             time.sleep(2)
-            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, 9000)
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_REL_YAW, -9000)
             time.sleep(2)
+
+            hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, -100)
 
         else: 
             print('Esperando conexion')
