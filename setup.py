@@ -20,7 +20,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'hoverrobot_comms_node = ros2_hoverrobot_comms.main:main'
+            'hoverrobot_comms_node = ros2_hoverrobot_comms.ros2_hoverrobot_comms_node:main'
         ],
     },
 )
