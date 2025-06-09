@@ -1,4 +1,3 @@
-<!-- ros2_hoverrobot_comms/package.xml -->
 <?xml version="1.0"?>
 <package format="3">
   <name>ros2_hoverrobot_comms</name>
@@ -7,9 +6,7 @@
   <maintainer email="patricio.garces@outlook.com">Pato Garcés</maintainer>
   <license>MIT</license>
 
-  <buildtool_depend>ament_python</buildtool_depend>
-
-  <exec_depend>rclpy</exec_depend>
+  <depend>rclpy</depend>
 
   <export>
     <build_type>ament_python</build_type>

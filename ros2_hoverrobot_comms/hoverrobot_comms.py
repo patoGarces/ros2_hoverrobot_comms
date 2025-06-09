@@ -18,6 +18,8 @@ class HoverRobotComms():
         self.queueReceiver = queue.Queue()
         self.socketClient = SocketClient(serverIp, serverPort, reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
 
+        self.queueDynamicData = queue.Queue()
+
         # Buffer global para acumular fragmentos de paquetes
         self.receive_buffer = b''
 
@@ -43,6 +45,9 @@ class HoverRobotComms():
         
     def getRobotStatus(self):
         return getattr(self.parsedDynamicData, "statusCode", RobotStatusCode.STATUS_ROBOT_INIT)
+    
+    def getQueueDynamicData(self):
+        return self.queueDynamicData
 
     def __processData(self): 
         while True:
@@ -76,6 +81,8 @@ class HoverRobotComms():
                         unpacked = struct.unpack(FORMAT_DYNAMYC_ROBOT, packet)
                         self.parsedDynamicData = RobotDynamicData(*unpacked)
 
+                        if (self.queueDynamicData is not None):
+                            self.queueDynamicData.put(self.parsedDynamicData)
                         # print(f">> status: {RobotStatusCode(self.parsedDynamicData.statusCode).name}\t>> battery: {self.parsedDynamicData.batVoltage}\t >> pitch: {self.parsedDynamicData.pitch}")
 
                     except struct.error as e:
