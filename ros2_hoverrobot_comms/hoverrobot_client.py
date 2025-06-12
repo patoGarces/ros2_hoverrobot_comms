@@ -59,10 +59,12 @@ class SocketClient:
     def __socketConnect(self):
         while True:
             try:
-                print(f"Intentando conectar a {self.serverIp}:{self.serverPort}...")
+                print(f"Intentando conectar a {self.serverIp}:{self.serverPort}...", flush=True)
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+                sock.settimeout(self.reconnectDelay)
+
                 sock.connect((self.serverIp, self.serverPort))
-                print("Conectado al servidor.")
 
                 self.stop_event.clear()
                 self.connected_event.set()
@@ -85,7 +87,7 @@ class SocketClient:
                     time.sleep(0.1)
 
             except Exception as e:
-                print(f"Error de conexión o envío: {e}")
+                print(f"Error de conexión o envío: {e}", flush=True)
             finally:
                 self.stop_event.set()
                 self.connected_event.clear()
@@ -93,7 +95,7 @@ class SocketClient:
                     sock.close()
                 except:
                     pass
-                print(f"[REINTENTO] Reintentando en {self.reconnectDelay} segundos...\n")
+                print(f"[REINTENTO] Reintentando en {self.reconnectDelay} segundos...\n", flush=True)
                 time.sleep(self.reconnectDelay)
 
 

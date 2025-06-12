@@ -3,7 +3,7 @@ import queue
 import time 
 import threading
 from ros2_hoverrobot_comms.hoverrobot_client import SocketClient
-from ros2_hoverrobot_comms.hoverrobot_types import DYNAMIC_ROBOT_PACKET_SIZE, FORMAT_DYNAMYC_ROBOT, FORMAT_COMMAND_ROBOT, RobotStatusCode, RobotDynamicData, CommandsRobotCode, RobotHeaderPackage
+from ros2_hoverrobot_comms.hoverrobot_types import DYNAMIC_ROBOT_PACKET_SIZE, FORMAT_DYNAMYC_ROBOT, FORMAT_COMMAND_ROBOT, FORMAT_CONTROL_ROBOT, RobotStatusCode, RobotDynamicData, CommandsRobotCode, RobotHeaderPackage
 
 SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
@@ -14,10 +14,8 @@ class HoverRobotComms():
     def __init__(self, serverIp, serverPort, reconnectDelay):
 
         self.queueSender = queue.Queue()
-        # self.queueSender = None
         self.queueReceiver = queue.Queue()
         self.socketClient = SocketClient(serverIp, serverPort, reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
-
         self.queueDynamicData = queue.Queue()
 
         # Buffer global para acumular fragmentos de paquetes
@@ -30,9 +28,21 @@ class HoverRobotComms():
 
     def isRobotConnected(self): 
         return self.socketClient.isConnected()
+    
+    def sendControl(self, linearVel, angularVel):
+        if (self.queueSender is not None and self.isRobotConnected() and self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
+            packed = struct.pack(FORMAT_CONTROL_ROBOT, 
+                        RobotHeaderPackage.HEADER_PACKAGE_CONTROL.value, 
+                        int(angularVel * 100.00),
+                        int(linearVel * 100.00), 
+                    )
+            self.queueSender.put(packed)
+            return True
+        else:
+            return False
 
     def sendCommand(self, command, value): 
-        if (self.queueSender is not None and self.socketClient.isConnected and self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
+        if (self.queueSender is not None and self.isRobotConnected() and self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
             packed = struct.pack(FORMAT_COMMAND_ROBOT, 
                         RobotHeaderPackage.HEADER_PACKAGE_COMMAND.value, 
                         command.value, 
@@ -40,7 +50,6 @@ class HoverRobotComms():
             self.queueSender.put(packed)
             return True
         else:
-            print('socket desconectado, queueSender is None o robot no estabilizado')
             return False
         
     def getRobotStatus(self):

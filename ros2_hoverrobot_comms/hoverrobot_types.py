@@ -37,12 +37,20 @@ class RobotHeaderPackage(Enum):
     HEADER_PACKAGE_SETTINGS = 0xAB03         # key que indica que el paquete enviado es de configuracion
     HEADER_PACKAGE_COMMAND = 0xAB04          # key que indica que el paquete enviado es un comando
 
-FORMAT_COMMAND_ROBOT = "<2H1h"  # 2 uint16, 1 int16, Camba a ! si es big endian
-COMMAND_ROBOT_PACKET_SIZE = struct.calcsize(FORMAT_COMMAND_ROBOT)
+FORMAT_COMMAND_ROBOT = "<2H1h"  # 2 uint16, 1 int16, Cambia a ! si es big endian
+# COMMAND_ROBOT_PACKET_SIZE = struct.calcsize(FORMAT_COMMAND_ROBOT)
 RobotCommandData = namedtuple('RobotCommandsData', [
     'headerPackage',
     'command',
     'value'
+])
+
+FORMAT_CONTROL_ROBOT = "<H2h"  # 1 uint16, 2 int16, Cambia a ! si es big endian
+# CONTROL_ROBOT_PACKET_SIZE = struct.calcsize(FORMAT_CONTROL_ROBOT)
+RobotControlData = namedtuple('RobotControlData', [
+    'headerPackage',
+    'angularVel',
+    'linearVel'
 ])
 
 FORMAT_DYNAMYC_ROBOT = "<6H13h2H"  # 6 uint16, 13 int16, 2 uint16, Cambia a ! si es big endian

@@ -2,9 +2,8 @@ import rclpy
 from rclpy.node import Node 
 import threading
 from std_msgs.msg import String # TODO: reemplazar por el tipo de message especifico
-
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion, TransformStamped
+from geometry_msgs.msg import Quaternion, TransformStamped, Twist
 from tf2_ros import TransformBroadcaster
 import tf_transformations
 
@@ -13,7 +12,7 @@ import queue
 import time
 import math
 
-from ros2_hoverrobot_comms.hoverrobot_comms import HoverRobotComms
+from ros2_hoverrobot_comms.hoverrobot_comms import HoverRobotComms, CommandsRobotCode
 from ros2_hoverrobot_comms.hoverrobot_types import RobotStatusCode
 
 
@@ -26,20 +25,28 @@ class HoverRobotCommsNode(Node):
         super().__init__('hoverrobot_comms_node')
 
         self.publishers_ = self.create_publisher(String, 'hoverrobot_dynamic_data', 10)
-        self.hoverRobotComms = HoverRobotComms(SERVER_IP, SERVER_PORT, RECONNECT_DELAY)
+        self.subscription = self.create_subscription(Twist,'/cmd_vel',self.__cmdVelCallback,10)
 
-        self.queueDynamicData = self.hoverRobotComms.getQueueDynamicData()
+        # Timer para ejecutar a ritmo fijo (cada 100ms = 10Hz)
+        self.dt = 0.025  # segundos
+        self.timer = self.create_timer(self.dt, self.timer_callback)
+
+        # Última velocidad recibida
+        self.latest_linear = 0.0  # m/s
+        self.latest_angular = 0.0  # rad/s
+
 
         self.odom_pub = self.create_publisher(Odometry, 'odom', 10)
         self.tf_broadcaster = TransformBroadcaster(self)
+
+        self.hoverRobotComms = HoverRobotComms(SERVER_IP, SERVER_PORT, RECONNECT_DELAY)
+        self.queueDynamicData = self.hoverRobotComms.getQueueDynamicData()
 
         print('esperando conexion')
         while(not self.hoverRobotComms.isRobotConnected()):
             time.sleep(1)
 
-        print('esperando status stabilized')
-        while(self.hoverRobotComms.getRobotStatus() != RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
-            time.sleep(1)
+        print('Robot conectado')
 
         self.thread = threading.Thread(target=self.__publishOdometers, daemon=True)
         self.thread.start()
@@ -65,7 +72,7 @@ class HoverRobotCommsNode(Node):
 
             imuRoll = robotDynamicData.roll / 100.00
             imuPitch = robotDynamicData.pitch / 100.00
-            imuYaw = robotDynamicData.yaw / 100.00
+            imuYaw = robotDynamicData.yaw / -100.00     # invierto sentido del yaw
 
             self.yaw = math.radians(imuYaw)
             self.x += delta_dist * math.cos(self.yaw)
@@ -94,6 +101,22 @@ class HoverRobotCommsNode(Node):
             odom.pose.pose.position.y = self.y
             odom.pose.pose.orientation = t.transform.rotation
             self.odom_pub.publish(odom)
+
+    def __cmdVelCallback(self, msg):
+
+        self.latest_linear = msg.linear.x
+        self.latest_angular = msg.angular.z
+
+        # print(f'nuevo cmd_vel: linear: {msg.linear.x}, \t angular: {msg.angular.z}')
+
+    def timer_callback(self):
+
+        if (self.hoverRobotComms.isRobotConnected):
+
+            if (self.latest_linear > 1.5): self.latest_linear = 1.5
+            if (self.latest_linear < -1.5): self.latest_linear = -1.5
+
+            self.hoverRobotComms.sendControl(linearVel= self.latest_linear, angularVel= self.latest_angular*-1.00)
 
 def main(args=None):
     rclpy.init(args=args)
