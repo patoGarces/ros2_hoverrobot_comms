@@ -116,7 +116,8 @@ class HoverRobotCommsNode(Node):
             if (self.latest_linear > 1.5): self.latest_linear = 1.5
             if (self.latest_linear < -1.5): self.latest_linear = -1.5
 
-            self.hoverRobotComms.sendControl(linearVel= self.latest_linear, angularVel= self.latest_angular*-1.00)
+            if (self.latest_linear != 0.0 or self.latest_angular != 0.0):      # Solo envio comandos si son distintos de cero, sino no envio nada
+                self.hoverRobotComms.sendControl(linearVel= self.latest_linear, angularVel= self.latest_angular*-1.00)
 
 def main(args=None):
     rclpy.init(args=args)
