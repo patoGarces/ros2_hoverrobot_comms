@@ -11,12 +11,14 @@ RECONNECT_DELAY = 5  # segundos entre reintentos
 
 class HoverRobotComms():
 
-    def __init__(self, serverIp, serverPort, reconnectDelay):
+    def __init__(self, logger, serverIp, serverPort, reconnectDelay):
 
         self.queueSender = queue.Queue()
         self.queueReceiver = queue.Queue()
         self.socketClient = SocketClient(serverIp, serverPort, reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
         self.queueDynamicData = queue.Queue()
+
+        self.logger = logger
 
         # Buffer global para acumular fragmentos de paquetes
         self.receive_buffer = b''
@@ -92,11 +94,9 @@ class HoverRobotComms():
 
                         if (self.queueDynamicData is not None):
                             self.queueDynamicData.put(self.parsedDynamicData)
-                        # print(f">> status: {RobotStatusCode(self.parsedDynamicData.statusCode).name}\t>> battery: {self.parsedDynamicData.batVoltage}\t >> pitch: {self.parsedDynamicData.pitch}")
 
                     except struct.error as e:
                         print(f"Error al parsear paquete: {e}")
-                        # Podrías descartar un byte o limpiar el buffer si esto ocurre frecuentemente
 
             except queue.Empty:
                 pass

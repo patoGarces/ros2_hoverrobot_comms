@@ -9,12 +9,10 @@ from tf2_ros import TransformBroadcaster
 import tf_transformations
 
 import queue
-
 import time
 import math
 
 from ros2_hoverrobot_comms.hoverrobot_comms import HoverRobotComms
-
 
 SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
@@ -33,15 +31,18 @@ class HoverRobotCommsNode(Node):
         self.range_front_right_publisher = self.create_publisher(Range, 'collision_sensor_FR', 10)
         self.tf_broadcaster = TransformBroadcaster(self)
 
+        self.logger = self.get_logger()
+
         # Última velocidad recibida
         self.latest_linear = 0.0  # m/s
         self.latest_angular = 0.0  # rad/s
+        self.last_was_zero = False
 
         # Timer para ejecutar a ritmo fijo (cada 100ms = 10Hz)
         self.dt = 0.025                                                             # segundos
         self.timer = self.create_timer(self.dt, self.timer_send_commands_callback)
 
-        self.hoverRobotComms = HoverRobotComms(SERVER_IP, SERVER_PORT, RECONNECT_DELAY)
+        self.hoverRobotComms = HoverRobotComms(logger=self.logger, serverIp= SERVER_IP, serverPort= SERVER_PORT, reconnectDelay= RECONNECT_DELAY)
         self.queueDynamicData = self.hoverRobotComms.getQueueDynamicData()
 
         print('esperando conexion')
@@ -137,18 +138,30 @@ class HoverRobotCommsNode(Node):
 
         self.latest_linear = msg.linear.x
         self.latest_angular = msg.angular.z
-
-        # print(f'nuevo cmd_vel: linear: {msg.linear.x}, \t angular: {msg.angular.z}')
+        # print(f'nuevo cmd_vel: linear: {msg.linear.x}, \t angular: {msg.angular.z}, statusCodeRobot: {self.hoverRobotComms.getRobotStatus()}')
 
     def timer_send_commands_callback(self):
 
-        if (self.hoverRobotComms.isRobotConnected):
+        if self.hoverRobotComms.isRobotConnected:
 
-            if (self.latest_linear > 1.5): self.latest_linear = 1.5
-            if (self.latest_linear < -1.5): self.latest_linear = -1.5
+            # saturar velocidades
+            self.latest_linear = max(-1.5, min(1.5, self.latest_linear))
 
-            if (self.latest_linear != 0.0 or self.latest_angular != 0.0):      # Solo envio comandos si son distintos de cero, sino no envio nada
-                self.hoverRobotComms.sendControl(linearVel= self.latest_linear, angularVel= self.latest_angular*-1.00)
+            # comprobar si ambas velocidades son cero
+            is_zero = (self.latest_linear == 0.0 and self.latest_angular == 0.0)
+
+            # condición: solo envío si no es cero, o si es cero pero antes no lo había enviado
+            if (not is_zero) or (is_zero and not self.last_was_zero):
+                print(f'envio vel: {self.latest_linear},  angular: {self.latest_angular}')
+                if not self.hoverRobotComms.sendControl(
+                    linearVel = self.latest_linear,
+                    angularVel = self.latest_angular * -1.0
+                ):
+                    print('ERROR COMANDO NO ENVIADO')
+
+                self.last_was_zero = is_zero
+            # else:
+                # print(f'Comando igual a cero -> vel: {self.latest_linear},  angular: {self.latest_angular}')
 
 def main(args=None):
     rclpy.init(args=args)
