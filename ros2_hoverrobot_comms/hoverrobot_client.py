@@ -10,19 +10,15 @@ RECONNECT_DELAY = 5  # segundos entre reintentos
 
 class SocketClient:
 
-    def __init__(self, serverIp, serverPort, reconnectDelay, sendQueue=None, recvQueue=None):
-        self.serverIp = serverIp
-        self.serverPort = serverPort
+    def __init__(self, logger, reconnectDelay, sendQueue=None, recvQueue=None):
         self.reconnectDelay = reconnectDelay
-
         self.sendQueue = sendQueue
         self.recvQueue = recvQueue
+        self.logger = logger
 
         self.stop_event = threading.Event()
         self.connected_event = threading.Event()  # Para saber si está conectado
-
-        self.thread = threading.Thread(target=self.__socketConnect, daemon=True)
-        self.thread.start()
+        self.connectedSocket = None
 
     def isConnected(self):
         return self.connected_event.is_set()
@@ -32,71 +28,91 @@ class SocketClient:
             while not self.stop_event.is_set():
                 data = sock.recv(1024)
                 if not data:
-                    print("Servidor cerró la conexión.")
+                    self.logger.error("Servidor cerró la conexión.")
                     break
-                queue.put(data)  # ⬅️ Mandamos los bytes crudos
+                queue.put(data)
         except Exception as e:
-            print("Error en receive_loop:", e)
+            if not self.stop_event.is_set():            # solo loggea si no fue stop intencional
+                self.logger.error("Error en receive_loop:", e)
         finally:
             self.stop_event.set()
-            self.connected_event.clear()  # Perdió conexión
+            self.connected_event.clear()
 
     def __send_loop(self, sock, send_queue):
         try:
             while not self.stop_event.is_set():
                 try:
-                    message = send_queue.get(timeout=1)  # Espera hasta que haya algo para enviar
+                    message = send_queue.get(timeout=1)
                     sock.sendall(message)
                 except queue.Empty:
                     continue
-                except (BrokenPipeError, ConnectionResetError, OSError):
-                    print("Error de envío, conexión perdida.")
-                    break
+        except (BrokenPipeError, ConnectionResetError, OSError) as e:
+            if not self.stop_event.is_set():            # solo loggea si no fue stop intencional
+                self.logger.error("Error de envío, conexión perdida.")
         finally:
             self.stop_event.set()
-            self.connected_event.clear()  # Perdió conexión
+            self.connected_event.clear()
 
-    def __socketConnect(self):
-        while True:
-            try:
-                print(f"Intentando conectar a {self.serverIp}:{self.serverPort}...", flush=True)
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def socketConnect(self, serverIp, serverPort):
+        # while True:
 
-                sock.settimeout(self.reconnectDelay)
+        self.stop_event.set()
+        time.sleep(0.1)     # Le doy tiempo a que los threads terminen
 
-                sock.connect((self.serverIp, self.serverPort))
+        self.logger.info('socketConnected en  SocketClient()')
 
-                self.stop_event.clear()
-                self.connected_event.set()
+        try:
+            self.logger.info(f"Intentando conectar a {serverIp}:{serverPort}...")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-                recv_thread = threading.Thread(target=self.__receive_loop, args=(sock, self.recvQueue), daemon=True)
-                send_thread = threading.Thread(target=self.__send_loop, args=(sock, self.sendQueue), daemon=True)
+            sock.settimeout(self.reconnectDelay)
 
-                if self.recvQueue is not None:
-                    recv_thread.start()
-                else: 
-                    print('Cola de recepcion no recibida, recepcion deshabilitada')
-                
-                if self.sendQueue is not None:
-                    send_thread.start()
-                else: 
-                    print('Cola de envio no recibida, envio deshabilitado')
+            sock.connect((serverIp, serverPort))
 
-                # Esperar que cualquiera de los threads termine (por error o desconexión)
-                while not self.stop_event.is_set():
-                    time.sleep(0.1)
+            self.connectedSocket = sock
+            self.stop_event.clear()
+            self.connected_event.set()
 
-            except Exception as e:
-                print(f"Error de conexión o envío: {e}", flush=True)
-            finally:
-                self.stop_event.set()
-                self.connected_event.clear()
+            recv_thread = threading.Thread(target=self.__receive_loop, args=(sock, self.recvQueue), daemon=True)
+            send_thread = threading.Thread(target=self.__send_loop, args=(sock, self.sendQueue), daemon=True)
+
+            if self.recvQueue is not None:
+                recv_thread.start()
+            else: 
+                self.logger.error('Cola de recepcion no recibida, recepcion deshabilitada')
+            
+            if self.sendQueue is not None:
+                send_thread.start()
+            else: 
+                self.logger.error('Cola de envio no recibida, envio deshabilitado')
+
+            return True
+
+            # Esperar que cualquiera de los threads termine (por error o desconexión)
+            # while not self.stop_event.is_set():
+            #     time.sleep(0.1)
+
+        except Exception as e:
+            self.logger.error(f"Error de conexión o envío: {e}")
+            self.stop_event.set()
+            self.connected_event.clear()
+            if 'sock' in locals():  # solo cierro si se creó
                 try:
                     sock.close()
                 except:
                     pass
-                print(f"[REINTENTO] Reintentando en {self.reconnectDelay} segundos...\n", flush=True)
-                time.sleep(self.reconnectDelay)
+            return False
+
+    def socketDisconnect(self):
+        """Desconecta y limpia recursos"""
+        self.stop_event.set()
+        self.connected_event.clear()
+        if self.sock:
+            try:
+                self.sock.close()
+            except:
+                pass
+            self.sock = None
 
 
 if __name__ == "__main__":

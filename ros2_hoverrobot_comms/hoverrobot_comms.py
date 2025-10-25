@@ -5,17 +5,13 @@ import threading
 from ros2_hoverrobot_comms.hoverrobot_client import SocketClient
 from ros2_hoverrobot_comms.hoverrobot_types import DYNAMIC_ROBOT_PACKET_SIZE, FORMAT_DYNAMYC_ROBOT, FORMAT_COMMAND_ROBOT, FORMAT_CONTROL_ROBOT, RobotStatusCode, RobotDynamicData, CommandsRobotCode, RobotHeaderPackage
 
-SERVER_IP = '192.168.0.101'
-SERVER_PORT = 8080
-RECONNECT_DELAY = 5  # segundos entre reintentos
-
 class HoverRobotComms():
 
-    def __init__(self, logger, serverIp, serverPort, reconnectDelay):
+    def __init__(self, logger, reconnectDelay):
 
         self.queueSender = queue.Queue()
         self.queueReceiver = queue.Queue()
-        self.socketClient = SocketClient(serverIp, serverPort, reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
+        self.socketClient = SocketClient(logger= logger, reconnectDelay=reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
         self.queueDynamicData = queue.Queue()
 
         self.logger = logger
@@ -24,9 +20,11 @@ class HoverRobotComms():
         self.receive_buffer = b''
 
         self.parsedDynamicData = None
-
         self.thread = threading.Thread(target=self.__processData, daemon=True)
         self.thread.start()
+
+    def connectToRobot(self, serverIp, serverPort):
+        self.socketClient.socketConnect(serverIp, serverPort)
 
     def isRobotConnected(self): 
         return self.socketClient.isConnected()
@@ -102,6 +100,11 @@ class HoverRobotComms():
                 pass
 
             time.sleep(0.025)        
+
+
+SERVER_IP = '192.168.0.101'
+SERVER_PORT = 8080
+RECONNECT_DELAY = 5  # segundos entre reintentos
 
 if __name__ == "__main__":
 

@@ -1,7 +1,8 @@
 import rclpy
-from rclpy.node import Node 
+from rclpy.lifecycle import LifecycleNode, LifecycleState, TransitionCallbackReturn
+from rclpy.lifecycle import State
 import threading
-from std_msgs.msg import String # TODO: reemplazar por el tipo de message especifico
+from std_msgs.msg import String
 from sensor_msgs.msg import Range
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion, TransformStamped, Twist
@@ -16,63 +17,237 @@ from ros2_hoverrobot_comms.hoverrobot_comms import HoverRobotComms
 
 SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
-RECONNECT_DELAY = 5  # segundos entre reintentos
+RECONNECT_DELAY = 5
 
-class HoverRobotCommsNode(Node):
+class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
     def __init__(self):
         super().__init__('hoverrobot_comms_node')
-
-        self.dynamic_data_publishers = self.create_publisher(String, 'hoverrobot_dynamic_data', 10)
-        self.subscription = self.create_subscription(Twist,'/cmd_vel',self.__cmdVelCallback,10)
-        self.odom_publisher = self.create_publisher(Odometry, 'odom', 10)
-        self.range_rear_left_publisher = self.create_publisher(Range, 'collision_sensor_RL', 10)
-        self.range_rear_right_publisher = self.create_publisher(Range, 'collision_sensor_RR', 10)
-        self.range_front_left_publisher = self.create_publisher(Range, 'collision_sensor_FL', 10)
-        self.range_front_right_publisher = self.create_publisher(Range, 'collision_sensor_FR', 10)
-        self.tf_broadcaster = TransformBroadcaster(self)
-
+        
         self.logger = self.get_logger()
-
-        # Última velocidad recibida
-        self.latest_linear = 0.0  # m/s
-        self.latest_angular = 0.0  # rad/s
+        
+        # Variables de estado
+        self.latest_linear = 0.0
+        self.latest_angular = 0.0
         self.last_was_zero = False
-
-        # Timer para ejecutar a ritmo fijo (cada 100ms = 10Hz)
-        self.dt = 0.025                                                             # segundos
-        self.timer = self.create_timer(self.dt, self.timer_send_commands_callback)
-
-        self.hoverRobotComms = HoverRobotComms(logger=self.logger, serverIp= SERVER_IP, serverPort= SERVER_PORT, reconnectDelay= RECONNECT_DELAY)
+        self.dt = 0.025
+        
+        # Inicializar comunicación (pero NO conectar aún)
+        self.hoverRobotComms = HoverRobotComms(
+            logger=self.logger, 
+            reconnectDelay=RECONNECT_DELAY
+        )
         self.queueDynamicData = self.hoverRobotComms.getQueueDynamicData()
-
-        print('esperando conexion')
-        while(not self.hoverRobotComms.isRobotConnected()):
-            time.sleep(1)
-
-        print('Robot conectado')
-
-        self.thread = threading.Thread(target=self.__publisherTask, daemon=True)
-        self.thread.start()
-
-    def __publisherTask(self):
-
+        
+        # Variables de odometría
         self.distAnt = 0
         self.x = 0
         self.y = 0
         
-        while(True):
+        # Publishers y timers se crean en configure/activate
+        self.timer = None
+        self.thread = None
+        self.connection_check_timer = None
+        
+        self.logger.info('Nodo creado (unconfigured)')
+
+    # ============= LIFECYCLE CALLBACKS =============
+    
+    def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """
+        Estado: unconfigured → inactive
+        Aquí creamos publishers, subscriptions, pero NO iniciamos operaciones
+        """
+        self.logger.info('Configurando nodo...')
+        
+        try:
+            # Crear publishers (pero no activados aún)
+            self.dynamic_data_publishers = self.create_lifecycle_publisher(
+                String, 'hoverrobot_dynamic_data', 10
+            )
+            self.odom_publisher = self.create_lifecycle_publisher(
+                Odometry, 'odom', 10
+            )
+            self.range_rear_left_publisher = self.create_lifecycle_publisher(
+                Range, 'collision_sensor_RL', 10
+            )
+            self.range_rear_right_publisher = self.create_lifecycle_publisher(
+                Range, 'collision_sensor_RR', 10
+            )
+            self.range_front_left_publisher = self.create_lifecycle_publisher(
+                Range, 'collision_sensor_FL', 10
+            )
+            self.range_front_right_publisher = self.create_lifecycle_publisher(
+                Range, 'collision_sensor_FR', 10
+            )
+            
+            self.tf_broadcaster = TransformBroadcaster(self)
+            
+            # Subscription (siempre activo)
+            self.subscription = self.create_subscription(
+                Twist, '/cmd_vel', self.__cmdVelCallback, 10
+            )
+            
+            self.logger.info('✓ Nodo configurado')
+            return TransitionCallbackReturn.SUCCESS
+            
+        except Exception as e:
+            self.logger.error(f'Error en configuración: {e}')
+            return TransitionCallbackReturn.FAILURE
+
+    def on_activate(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """
+        Estado: inactive → active
+        Aquí intentamos conectar al robot y activar publicaciones
+        """
+        self.logger.info('Activando nodo... intentando conectar al robot')
+        
+        # Limpio el timer de reconexion
+        if hasattr(self, 'reconnect_timer') and self.reconnect_timer:
+            self.reconnect_timer.cancel()
+            self.reconnect_timer = None
+
+        # Intentar conectar (con timeout)
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            if self.hoverRobotComms.isRobotConnected():
+                self.logger.info(f'✓ Robot conectado (intento {attempt + 1})')
+                break
+            
+            self.hoverRobotComms.connectToRobot(serverIp=SERVER_IP, serverPort=SERVER_PORT)
+            self.logger.warn(f'Esperando conexión... ({attempt + 1}/{max_attempts})')
+            time.sleep(1)
+        
+        if not self.hoverRobotComms.isRobotConnected():
+            self.logger.error('✗ No se pudo conectar al robot')
+            return TransitionCallbackReturn.FAILURE
+        
+        # Activar publishers
+        self.dynamic_data_publishers.on_activate(state)
+        self.odom_publisher.on_activate(state)
+        self.range_rear_left_publisher.on_activate(state)
+        self.range_rear_right_publisher.on_activate(state)
+        self.range_front_left_publisher.on_activate(state)
+        self.range_front_right_publisher.on_activate(state)
+        
+        # Iniciar thread de publicación
+        self.thread = threading.Thread(target=self.__publisherTask, daemon=True)
+        self.thread.start()
+        
+        # Iniciar timer de comandos
+        self.timer = self.create_timer(self.dt, self.timer_send_commands_callback)
+        
+        # Timer para monitorear conexión cada 2 segundos
+        self.connection_check_timer = self.create_timer(
+            2.0, self.__check_connection_callback
+        )
+        
+        self.logger.info('✓ Nodo activo y operando')
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """
+        Estado: active → inactive
+        Pausamos operaciones pero mantenemos la configuración
+        """
+        self.logger.warn('Desactivando nodo...')
+        
+        # Detener timers
+        if self.timer:
+            self.timer.cancel()
+            self.timer = None
+        if self.connection_check_timer:
+            self.connection_check_timer.cancel()
+            self.connection_check_timer = None
+        
+        # Desactivar publishers
+        self.dynamic_data_publishers.on_deactivate(state)
+        self.odom_publisher.on_deactivate(state)
+        self.range_rear_left_publisher.on_deactivate(state)
+        self.range_rear_right_publisher.on_deactivate(state)
+        self.range_front_left_publisher.on_deactivate(state)
+        self.range_front_right_publisher.on_deactivate(state)
+        
+        # Enviar velocidad cero antes de desactivar
+        self.hoverRobotComms.sendControl(linearVel=0.0, angularVel=0.0)
+        
+        self.logger.info('✓ Nodo desactivado')
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_cleanup(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """
+        Estado: inactive → unconfigured
+        Limpiamos recursos completamente
+        """
+        self.logger.info('Limpiando nodo...')
+        
+        # Destruir publishers
+        self.destroy_publisher(self.dynamic_data_publishers)
+        self.destroy_publisher(self.odom_publisher)
+        self.destroy_publisher(self.range_rear_left_publisher)
+        self.destroy_publisher(self.range_rear_right_publisher)
+        self.destroy_publisher(self.range_front_left_publisher)
+        self.destroy_publisher(self.range_front_right_publisher)
+        
+        self.logger.info('✓ Nodo limpiado')
+        return TransitionCallbackReturn.SUCCESS
+
+    def on_shutdown(self, state: LifecycleState) -> TransitionCallbackReturn:
+        """
+        Shutdown desde cualquier estado
+        """
+        self.logger.info('Apagando nodo...')
+        
+        # Detener robot
+        if self.hoverRobotComms:
+            self.hoverRobotComms.sendControl(linearVel=0.0, angularVel=0.0)
+        
+        return TransitionCallbackReturn.SUCCESS
+
+    # ============= MONITOREO DE CONEXIÓN =============
+    
+    def __check_connection_callback(self):
+        """
+        Verifica periódicamente si el robot sigue conectado
+        Si se desconecta, auto-transiciona a inactive
+        """
+        if not self.hoverRobotComms.isRobotConnected():
+            self.logger.error('¡Conexión con robot perdida!')
+            
+            # Auto-transición a inactive
+            self.trigger_deactivate()
+            
+            # Inicio timer de reconexión
+            # self.reconnect_timer = self.create_timer(5.0, self.__try_reconnect)
+
+    def __try_reconnect(self):
+        """
+        Intenta reconectar y volver a activar el nodo
+        """
+        self.logger.info('Intentando reconectar...')
+        
+        if hasattr(self, 'reconnect_timer'):
+            self.reconnect_timer.cancel()
+            self.reconnect_timer = None
+
+        self.trigger_activate()
+
+    
+    def __publisherTask(self):
+        while True:
+
             try:
                 robotDynamicData = self.queueDynamicData.get(timeout=1)
             except queue.Empty:
                 continue
 
-            posInMeters = robotDynamicData.posInMeters/ 100.00
+            # ... tu lógica de publicación original ...
+            posInMeters = robotDynamicData.posInMeters / 100.00
             delta_dist = posInMeters - self.distAnt
             self.distAnt = posInMeters
 
             imuRoll = robotDynamicData.roll / 100.00
             imuPitch = robotDynamicData.pitch / 100.00
-            imuYaw = robotDynamicData.yaw / -100.00     # invierto sentido del yaw
+            imuYaw = robotDynamicData.yaw / -100.00
 
             collisionDistanceFrontLeftInMeters = robotDynamicData.collisionFL / 10000.00
             collisionDistanceFrontRightInMeters = robotDynamicData.collisionFR / 10000.00
@@ -83,25 +258,23 @@ class HoverRobotCommsNode(Node):
             self.x += delta_dist * math.cos(self.yaw)
             self.y += delta_dist * math.sin(self.yaw)
 
-
-            pitchInRads = 0.0 # math.radians(imuPitch)
+            pitchInRads = 0.0
             quat = tf_transformations.quaternion_from_euler(0.0, pitchInRads, self.yaw)
 
             now = self.get_clock().now().to_msg()
-            # → TF
+            
+            # TF
             t = TransformStamped()
             t.header.stamp = now
             t.header.frame_id = 'odom'
             t.child_frame_id = 'base_link'
             t.transform.translation.x = self.x
             t.transform.translation.y = self.y
-            t.transform.translation.z = 0.4                 # TODO: ajustar altura del robot
-
-            # TODO: faltan las rotaciones
+            t.transform.translation.z = 0.4
             t.transform.rotation = Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3])
             self.tf_broadcaster.sendTransform(t)
 
-            # → Odometry
+            # Odometry
             odom = Odometry()
             odom.header.stamp = now
             odom.header.frame_id = 'odom'
@@ -111,64 +284,68 @@ class HoverRobotCommsNode(Node):
             odom.pose.pose.orientation = t.transform.rotation
             self.odom_publisher.publish(odom)
 
-            range = Range()
-            range.header.stamp = now
-            range.min_range = 0.03
-            range.max_range = 1.00
-            range.radiation_type = 0 # ULTRASOUND
-            range.field_of_view = 0.26179           # angle sensor in rad, 15 grados
+            # Range sensors
+            range_msg = Range()
+            range_msg.header.stamp = now
+            range_msg.min_range = 0.03
+            range_msg.max_range = 1.00
+            range_msg.radiation_type = 0
+            range_msg.field_of_view = 0.26179
 
-            range.header.frame_id = 'range_front_left'
-            range.range = collisionDistanceFrontLeftInMeters
-            self.range_front_left_publisher.publish(range)
+            range_msg.header.frame_id = 'range_front_left'
+            range_msg.range = collisionDistanceFrontLeftInMeters
+            self.range_front_left_publisher.publish(range_msg)
 
-            range.header.frame_id = 'range_front_right'
-            range.range = collisionDistanceFrontRightInMeters
-            self.range_front_right_publisher.publish(range)
+            range_msg.header.frame_id = 'range_front_right'
+            range_msg.range = collisionDistanceFrontRightInMeters
+            self.range_front_right_publisher.publish(range_msg)
 
-            range.header.frame_id = 'range_rear_left'
-            range.range = collisionDistanceRearLeftInMeters
-            self.range_rear_left_publisher.publish(range)
+            range_msg.header.frame_id = 'range_rear_left'
+            range_msg.range = collisionDistanceRearLeftInMeters
+            self.range_rear_left_publisher.publish(range_msg)
 
-            range.header.frame_id = 'range_rear_right'
-            range.range = collisionDistanceRearRightInMeters
-            self.range_rear_right_publisher.publish(range)
+            range_msg.header.frame_id = 'range_rear_right'
+            range_msg.range = collisionDistanceRearRightInMeters
+            self.range_rear_right_publisher.publish(range_msg)
 
     def __cmdVelCallback(self, msg):
-
         self.latest_linear = msg.linear.x
         self.latest_angular = msg.angular.z
-        # print(f'nuevo cmd_vel: linear: {msg.linear.x}, \t angular: {msg.angular.z}, statusCodeRobot: {self.hoverRobotComms.getRobotStatus()}')
 
     def timer_send_commands_callback(self):
-
-        if self.hoverRobotComms.isRobotConnected:
-
-            # saturar velocidades
+        if self.hoverRobotComms.isRobotConnected():
             self.latest_linear = max(-1.5, min(1.5, self.latest_linear))
-
-            # comprobar si ambas velocidades son cero
             is_zero = (self.latest_linear == 0.0 and self.latest_angular == 0.0)
 
-            # condición: solo envío si no es cero, o si es cero pero antes no lo había enviado
             if (not is_zero) or (is_zero and not self.last_was_zero):
-                print(f'envio vel: {self.latest_linear},  angular: {self.latest_angular}')
                 if not self.hoverRobotComms.sendControl(
-                    linearVel = self.latest_linear,
-                    angularVel = self.latest_angular * -1.0
+                    linearVel=self.latest_linear,
+                    angularVel=self.latest_angular * -1.0
                 ):
-                    print('ERROR COMANDO NO ENVIADO')
+                    self.logger.error('ERROR: Comando no enviado')
 
                 self.last_was_zero = is_zero
-            # else:
-                # print(f'Comando igual a cero -> vel: {self.latest_linear},  angular: {self.latest_angular}')
+
+        else:
+            self.logger.error('Timer de envio activado PERO robot desconectado!')
+
 
 def main(args=None):
     rclpy.init(args=args)
+    
+    executor = rclpy.executors.SingleThreadedExecutor()
     node = HoverRobotCommsNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    executor.add_node(node)
+    
+    try:
+        executor.spin()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        executor.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
