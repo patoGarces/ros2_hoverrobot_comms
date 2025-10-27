@@ -30,7 +30,10 @@ class HoverRobotComms():
         return self.socketClient.isConnected()
     
     def sendControl(self, linearVel, angularVel):
-        if (self.queueSender is not None and self.isRobotConnected() and self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
+        if (self.queueSender is not None and self.isRobotConnected() and 
+            self.parsedDynamicData is not None and
+            self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value
+            ):
             packed = struct.pack(FORMAT_CONTROL_ROBOT, 
                         RobotHeaderPackage.HEADER_PACKAGE_CONTROL.value, 
                         int(angularVel * 100.00),
@@ -42,7 +45,10 @@ class HoverRobotComms():
             return False
 
     def sendCommand(self, command, value): 
-        if (self.queueSender is not None and self.isRobotConnected() and self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
+        if (self.queueSender is not None and self.isRobotConnected() and 
+            self.parsedDynamicData is not None and
+            self.parsedDynamicData.statusCode == RobotStatusCode.STATUS_ROBOT_STABILIZED.value
+            ):
             packed = struct.pack(FORMAT_COMMAND_ROBOT, 
                         RobotHeaderPackage.HEADER_PACKAGE_COMMAND.value, 
                         command.value, 

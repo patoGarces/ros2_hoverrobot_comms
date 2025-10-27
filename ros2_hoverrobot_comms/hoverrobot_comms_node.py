@@ -19,7 +19,7 @@ SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
 RECONNECT_DELAY = 5
 
-class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
+class HoverRobotCommsNode(LifecycleNode):
     def __init__(self):
         super().__init__('hoverrobot_comms_node')
         
@@ -107,7 +107,7 @@ class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
             self.reconnect_timer = None
 
         # Intentar conectar (con timeout)
-        max_attempts = 10
+        max_attempts = 3
         for attempt in range(max_attempts):
             if self.hoverRobotComms.isRobotConnected():
                 self.logger.info(f'✓ Robot conectado (intento {attempt + 1})')
@@ -119,7 +119,7 @@ class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
         
         if not self.hoverRobotComms.isRobotConnected():
             self.logger.error('✗ No se pudo conectar al robot')
-            return TransitionCallbackReturn.FAILURE
+            # return TransitionCallbackReturn.FAILURE
         
         # Activar publishers
         self.dynamic_data_publishers.on_activate(state)
@@ -141,7 +141,7 @@ class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
             2.0, self.__check_connection_callback
         )
         
-        self.logger.info('✓ Nodo activo y operando')
+        self.logger.info('✓ Nodo activo y robot conectado')
         return TransitionCallbackReturn.SUCCESS
 
     def on_deactivate(self, state: LifecycleState) -> TransitionCallbackReturn:
@@ -211,13 +211,13 @@ class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
         Si se desconecta, auto-transiciona a inactive
         """
         if not self.hoverRobotComms.isRobotConnected():
-            self.logger.error('¡Conexión con robot perdida!')
+            self.logger.error('Robot desconectado')
             
             # Auto-transición a inactive
             self.trigger_deactivate()
             
             # Inicio timer de reconexión
-            # self.reconnect_timer = self.create_timer(5.0, self.__try_reconnect)
+            self.reconnect_timer = self.create_timer(5.0, self.__try_reconnect)
 
     def __try_reconnect(self):
         """
@@ -322,12 +322,12 @@ class HoverRobotCommsNode(LifecycleNode):  # ← Cambio aquí
                     linearVel=self.latest_linear,
                     angularVel=self.latest_angular * -1.0
                 ):
-                    self.logger.error('ERROR: Comando no enviado')
+                    self.logger.info('ERROR: Comando no enviado')
 
                 self.last_was_zero = is_zero
 
-        else:
-            self.logger.error('Timer de envio activado PERO robot desconectado!')
+        # else:
+        #     self.logger.error('Timer de envio activado PERO robot desconectado!')
 
 
 def main(args=None):
