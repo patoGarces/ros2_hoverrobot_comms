@@ -2,18 +2,23 @@ import struct
 import queue 
 import time 
 import threading
-from ros2_hoverrobot_comms.hoverrobot_client import SocketClient
+from ros2_hoverrobot_comms.hoverrobot_client_socket import SocketClient
+from ros2_hoverrobot_comms.hoverrobot_client_serial import SerialClient
 from ros2_hoverrobot_comms.hoverrobot_types import DYNAMIC_ROBOT_PACKET_SIZE, FORMAT_DYNAMYC_ROBOT, FORMAT_COMMAND_ROBOT, FORMAT_CONTROL_ROBOT, RobotStatusCode, RobotDynamicData, CommandsRobotCode, RobotHeaderPackage
+from ros2_hoverrobot_comms.base_transport import BaseTransport, Transport
 
 class HoverRobotComms():
 
-    def __init__(self, logger, reconnectDelay):
+    def __init__(self, logger, transport, reconnectDelay):
 
         self.queueSender = queue.Queue()
         self.queueReceiver = queue.Queue()
-        self.socketClient = SocketClient(logger= logger, reconnectDelay=reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
         self.queueDynamicData = queue.Queue()
 
+        if transport == Transport.TCP_IP:
+            self.transportModule = SocketClient(logger= logger, reconnectDelay=reconnectDelay, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
+        else:
+            self.transportModule = SerialClient(logger= logger, sendQueue=self.queueSender, recvQueue=self.queueReceiver)
         self.logger = logger
 
         # Buffer global para acumular fragmentos de paquetes
@@ -24,10 +29,10 @@ class HoverRobotComms():
         self.thread.start()
 
     def connectToRobot(self, serverIp, serverPort):
-        self.socketClient.socketConnect(serverIp, serverPort)
+        self.transportModule.connect(serverIp, serverPort)
 
     def isRobotConnected(self): 
-        return self.socketClient.isConnected()
+        return self.transportModule.isConnected()
     
     def sendControl(self, linearVel, angularVel):
         if (self.queueSender is not None and self.isRobotConnected() and 

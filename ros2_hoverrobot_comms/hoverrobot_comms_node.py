@@ -14,6 +14,7 @@ import time
 import math
 
 from ros2_hoverrobot_comms.hoverrobot_comms import HoverRobotComms
+from ros2_hoverrobot_comms.base_transport import Transport
 
 SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
@@ -34,6 +35,7 @@ class HoverRobotCommsNode(LifecycleNode):
         # Inicializar comunicación (pero NO conectar aún)
         self.hoverRobotComms = HoverRobotComms(
             logger=self.logger, 
+            transport= Transport.SERIAL,        # TODO: hacer configurable via param
             reconnectDelay=RECONNECT_DELAY
         )
         self.queueDynamicData = self.hoverRobotComms.getQueueDynamicData()

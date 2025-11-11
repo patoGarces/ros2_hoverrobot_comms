@@ -3,18 +3,18 @@ import threading
 import time
 import queue
 
+from ros2_hoverrobot_comms.base_transport import BaseTransport
+
 # SERVER_IP = '192.168.1.35'
 SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
 RECONNECT_DELAY = 5  # segundos entre reintentos
 
-class SocketClient:
+class SocketClient(BaseTransport):
 
     def __init__(self, logger, reconnectDelay, sendQueue=None, recvQueue=None):
+        super().__init__(logger, sendQueue, recvQueue)
         self.reconnectDelay = reconnectDelay
-        self.sendQueue = sendQueue
-        self.recvQueue = recvQueue
-        self.logger = logger
 
         self.stop_event = threading.Event()
         self.connected_event = threading.Event()  # Para saber si está conectado
@@ -53,13 +53,11 @@ class SocketClient:
             self.stop_event.set()
             self.connected_event.clear()
 
-    def socketConnect(self, serverIp, serverPort):
-        # while True:
-
+    def connect(self, serverIp, serverPort):
         self.stop_event.set()
         time.sleep(0.1)     # Le doy tiempo a que los threads terminen
 
-        self.logger.info('socketConnected en  SocketClient()')
+        self.logger.info('connect en SocketClient()')
 
         try:
             self.logger.info(f"Intentando conectar a {serverIp}:{serverPort}...")
@@ -103,7 +101,7 @@ class SocketClient:
                     pass
             return False
 
-    def socketDisconnect(self):
+    def disconnect(self):
         """Desconecta y limpia recursos"""
         self.stop_event.set()
         self.connected_event.clear()
