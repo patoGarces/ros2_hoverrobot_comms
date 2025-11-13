@@ -3,7 +3,8 @@ import threading
 import time
 import queue
 
-from ros2_hoverrobot_comms.base_transport import BaseTransport
+# from ros2_hoverrobot_comms.base_transport import BaseTransport
+from base_transport import BaseTransport
 
 # SERVER_IP = '192.168.1.35'
 SERVER_IP = '192.168.0.101'
