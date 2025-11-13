@@ -50,6 +50,8 @@ class SerialClient(BaseTransport):
 
         for p in puertos:
             descripcion = (p.description or "").lower()  # convierte a lowercase y evita None
+
+            self.logger.info(f'description: {descripcion}')
             if "usb-serial" in descripcion:
                 self.SerialPort = p.device  # ejemplo: /dev/ttyUSB0
             elif "usb-to-serial" in descripcion:             # TODO: solo para probar en windows
