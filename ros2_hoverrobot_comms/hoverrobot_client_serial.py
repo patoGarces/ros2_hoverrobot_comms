@@ -2,8 +2,7 @@ import threading
 import queue
 import serial.tools.list_ports
 
-from base_transport import BaseTransport
-# from ros2_hoverrobot_comms.base_transport import BaseTransport
+from ros2_hoverrobot_comms.base_transport import BaseTransport
 
 class SerialClient(BaseTransport):
     def __init__(self, logger, sendQueue, recvQueue):

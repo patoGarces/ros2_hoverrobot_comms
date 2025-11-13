@@ -324,7 +324,7 @@ class HoverRobotCommsNode(LifecycleNode):
                     linearVel=self.latest_linear,
                     angularVel=self.latest_angular * -1.0
                 ):
-                    self.logger.info('ERROR: Comando no enviado')
+                    self.logger.info(f'ERROR: Comando no enviado, statusRobot: {self.hoverRobotComms.getRobotStatus()}')
 
                 self.last_was_zero = is_zero
 
