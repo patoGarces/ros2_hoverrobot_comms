@@ -79,13 +79,21 @@ class HoverRobotComms():
 
                     while True:
                         sync_pos = self.receive_buffer.find(struct.pack('<H', RobotHeaderPackage.HEADER_PACKAGE_STATUS.value))
-                        if sync_pos == -1:
-                            self.receive_buffer = b''
-                            break
 
+                        # self.logger.info(f"paquete> {len(self.receive_buffer)} bytes: {self.receive_buffer.hex(' ')}")
+
+                        if sync_pos == -1:
+                            # Esperar más data, NO borrar
+                            self.logger.warn('Paquete descartado')
+                            break
+                        # else:
+                        #    self.logger.info(f'Paquete con pos: {sync_pos}, len valid: {(len(self.receive_buffer) - sync_pos) >= # DYNAMIC_ROBOT_PACKET_SIZE}')
+
+                        # Cortar basura anterior
                         if sync_pos > 0:
                             self.receive_buffer = self.receive_buffer[sync_pos:]
 
+                        # No hay suficiente para un paquete entero
                         if len(self.receive_buffer) < DYNAMIC_ROBOT_PACKET_SIZE:
                             break
 
@@ -95,12 +103,14 @@ class HoverRobotComms():
                         try:
                             unpacked = struct.unpack(FORMAT_DYNAMYC_ROBOT, packet)
                             self.parsedDynamicData = RobotDynamicData(*unpacked)
-                            if self.queueDynamicData is not None:
+                            if self.queueDynamicData:
+                                self.logger.warn('PAQUETE DESPACHADO OK!!')
                                 self.queueDynamicData.put(self.parsedDynamicData)
                         except struct.error as e:
                             self.logger.warning(f"Error al parsear paquete: {e}")
+                            # descartamos solo el primer byte para intentar mantener alineación
+                            self.receive_buffer = self.receive_buffer[1:]
 
-                # Delay descanso solo si la cola está vacía
                 time.sleep(0.001)
 
             except Exception as e:
@@ -192,7 +202,7 @@ if __name__ == "__main__":
         while(not hoverRobotComms.isRobotConnected()):
             time.sleep(1)
 
-        # print('esperando status stabilized')
+        print('esperando status stabilized')
         # while(hoverRobotComms.getRobotStatus() != RobotStatusCode.STATUS_ROBOT_STABILIZED.value):
         #     time.sleep(1)
 
@@ -209,7 +219,7 @@ if __name__ == "__main__":
 
             # hoverRobotComms.sendMockStatus()
             # print('enviado comando ')
-            # time.sleep(0.5)
+            time.sleep(0.5)
 
             # hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 3)
 

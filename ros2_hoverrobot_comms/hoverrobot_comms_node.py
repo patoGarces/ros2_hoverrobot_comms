@@ -242,6 +242,8 @@ class HoverRobotCommsNode(LifecycleNode):
             except queue.Empty:
                 continue
 
+
+            self.logger.info(f'robotDynamicData status: {robotDynamicData.statusCode}')
             # ... tu lógica de publicación original ...
             posInMeters = robotDynamicData.posInMeters / 100.00
             delta_dist = posInMeters - self.distAnt
