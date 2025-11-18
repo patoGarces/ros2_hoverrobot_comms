@@ -20,6 +20,8 @@ SERVER_IP = '192.168.0.101'
 SERVER_PORT = 8080
 RECONNECT_DELAY = 5
 
+WHEEL_BASE = 0.32
+
 class HoverRobotCommsNode(LifecycleNode):
     def __init__(self):
         super().__init__('hoverrobot_comms_node')
@@ -235,60 +237,91 @@ class HoverRobotCommsNode(LifecycleNode):
 
     
     def __publisherTask(self):
-        while True:
+        if not hasattr(self, 'initialized'):
+            self.initialized = True
+            self.x = 0.0
+            self.y = 0.0
+            self.yaw = 0.0
+            self.lastPosMeters = None
 
+        while True:
             try:
                 robotDynamicData = self.queueDynamicData.get(timeout=1)
             except queue.Empty:
                 continue
 
-
-            self.logger.info(f'robotDynamicData status: {robotDynamicData.statusCode}')
-            # ... tu lógica de publicación original ...
-            posInMeters = robotDynamicData.posInMeters / 100.00
-            delta_dist = posInMeters - self.distAnt
-            self.distAnt = posInMeters
-
-            imuRoll = robotDynamicData.roll / 100.00
-            imuPitch = robotDynamicData.pitch / 100.00
-            imuYaw = robotDynamicData.yaw / -100.00
-
-            collisionDistanceFrontLeftInMeters = robotDynamicData.collisionFL / 10000.00
-            collisionDistanceFrontRightInMeters = robotDynamicData.collisionFR / 10000.00
-            collisionDistanceRearLeftInMeters = robotDynamicData.collisionRL / 10000.00
-            collisionDistanceRearRightInMeters = robotDynamicData.collisionRR / 10000.00
-
-            self.yaw = math.radians(imuYaw)
-            self.x += delta_dist * math.cos(self.yaw)
-            self.y += delta_dist * math.sin(self.yaw)
-
-            pitchInRads = 0.0
-            quat = tf_transformations.quaternion_from_euler(0.0, pitchInRads, self.yaw)
-
             now = self.get_clock().now().to_msg()
-            
-            # TF
+
+            self.yaw = math.radians(robotDynamicData.yaw / -100.0)
+
+            # ------------------------------------------
+            # 2. POSICIÓN LINEAL (YA FUSIONADA EN EL ROBOT)
+            # ------------------------------------------
+            posMeters = robotDynamicData.posInMeters / 100.00
+
+            if self.lastPosMeters is None:
+                self.lastPosMeters = posMeters
+
+            d = posMeters - self.lastPosMeters   # desplazamiento desde el último ciclo
+            self.lastPosMeters = posMeters
+
+            # Integración de posicion
+            self.x += d * math.cos(self.yaw)
+            self.y += d * math.sin(self.yaw)
+
+            quat = tf_transformations.quaternion_from_euler(0.0, 0.0, self.yaw)
+
+            # ------------------------------------------
+            # 3. VELOCIDADES
+            # ------------------------------------------
+            speedL = robotDynamicData.speedL / 100.00
+            speedR = robotDynamicData.speedR / 100.00
+
+            v = (speedL + speedR) / 2
+            w = (speedR - speedL) / WHEEL_BASE
+
+            # ------------------------------------------
+            # 4. TF
+            # ------------------------------------------
             t = TransformStamped()
             t.header.stamp = now
             t.header.frame_id = 'odom'
             t.child_frame_id = 'base_link'
             t.transform.translation.x = self.x
             t.transform.translation.y = self.y
-            t.transform.translation.z = 0.4
-            t.transform.rotation = Quaternion(x=quat[0], y=quat[1], z=quat[2], w=quat[3])
+            t.transform.translation.z = 0.0
+            t.transform.rotation = Quaternion(
+                x=quat[0], y=quat[1], z=quat[2], w=quat[3]
+            )
             self.tf_broadcaster.sendTransform(t)
 
-            # Odometry
+            # ------------------------------------------
+            # 5. ODOMETRY
+            # ------------------------------------------
             odom = Odometry()
             odom.header.stamp = now
             odom.header.frame_id = 'odom'
             odom.child_frame_id = 'base_link'
+
             odom.pose.pose.position.x = self.x
             odom.pose.pose.position.y = self.y
+            odom.pose.pose.position.z = 0.0
             odom.pose.pose.orientation = t.transform.rotation
+
+            odom.twist.twist.linear.x = v
+            odom.twist.twist.angular.z = w
+
             self.odom_publisher.publish(odom)
 
-            # Range sensors
+
+            # ------------------------------------------
+            # 8. RANGERS
+            # ------------------------------------------
+            collisionDistanceFrontLeftInMeters = robotDynamicData.collisionFL / 10000.00
+            collisionDistanceFrontRightInMeters = robotDynamicData.collisionFR / 10000.00
+            collisionDistanceRearLeftInMeters = robotDynamicData.collisionRL / 10000.00
+            collisionDistanceRearRightInMeters = robotDynamicData.collisionRR / 10000.00
+
             range_msg = Range()
             range_msg.header.stamp = now
             range_msg.min_range = 0.03
