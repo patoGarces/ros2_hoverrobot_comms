@@ -53,7 +53,7 @@ RobotControlData = namedtuple('RobotControlData', [
     'linearVel'
 ])
 
-FORMAT_DYNAMYC_ROBOT = "<6H17h1H"  # 6 uint16, 17 int16, 1 uint16, Cambia a ! si es big endian
+FORMAT_DYNAMYC_ROBOT = "<6H19h1H"  # 6 uint16, 19 int16, 1 uint16, Cambia a ! si es big endian
 DYNAMIC_ROBOT_PACKET_SIZE = struct.calcsize(FORMAT_DYNAMYC_ROBOT)
 RobotDynamicData = namedtuple('RobotData', [    # TODO: reemplazar el 'RobotData'
     'headerPackage',
@@ -64,6 +64,8 @@ RobotDynamicData = namedtuple('RobotData', [    # TODO: reemplazar el 'RobotData
     'mainboardTemp',
     'speedR',
     'speedL',
+    'posWheelR',
+    'posWheelL',
     'currentR',
     'currentL',
     'pitch',

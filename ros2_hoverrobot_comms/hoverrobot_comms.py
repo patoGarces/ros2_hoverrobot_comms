@@ -84,7 +84,6 @@ class HoverRobotComms():
 
                         if sync_pos == -1:
                             # Esperar más data, NO borrar
-                            self.logger.warn('Paquete descartado')
                             break
                         # else:
                         #    self.logger.info(f'Paquete con pos: {sync_pos}, len valid: {(len(self.receive_buffer) - sync_pos) >= # DYNAMIC_ROBOT_PACKET_SIZE}')
@@ -104,7 +103,6 @@ class HoverRobotComms():
                             unpacked = struct.unpack(FORMAT_DYNAMYC_ROBOT, packet)
                             self.parsedDynamicData = RobotDynamicData(*unpacked)
                             if self.queueDynamicData:
-                                self.logger.warn('PAQUETE DESPACHADO OK!!')
                                 self.queueDynamicData.put(self.parsedDynamicData)
                         except struct.error as e:
                             self.logger.warning(f"Error al parsear paquete: {e}")
@@ -157,6 +155,8 @@ class HoverRobotComms():
                 command.mainboardTemp,
                 command.speedR,
                 command.speedL,
+                command.posWheelR,
+                command.posWheelL,
                 command.currentR,
                 command.currentL,
                 command.pitch,
@@ -212,18 +212,18 @@ if __name__ == "__main__":
 
             try:
                 data = queueReceive.get()
-                print(f"{time.time():.3f}: Recibido {data.statusCode}")
+                print(f"{time.time():.3f}: Recibido {data.statusCode}, posR: {data.posWheelL/1000.0}")
             except queue.Empty:
                 print("No hay datos recibidos aún.")
 
 
             # hoverRobotComms.sendMockStatus()
             # print('enviado comando ')
-            time.sleep(0.5)
+            # time.sleep(0.5)
 
             # hoverRobotComms.sendCommand(CommandsRobotCode.COMMAND_MOVE_FORWARD, 3)
 
-            # hoverRobotComms.sendControl(linearVel=1.2, angularVel=3.4)
+            # hoverRobotComms.sendControl(linearVel=0, angularVel=0.5)
             # time.sleep(5)
 
         else: 
