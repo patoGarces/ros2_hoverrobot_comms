@@ -114,11 +114,11 @@ class HoverRobotCommsNode(LifecycleNode):
         max_attempts = 3
         for attempt in range(max_attempts):
             if self.hoverRobotComms.isRobotConnected():
-                self.logger.info(f'✓ Robot conectado (intento {attempt + 1})')
+                self.logger.info(f'✅ Robot conectado (intento {attempt + 1})')
                 break
             
             self.hoverRobotComms.connectToRobot(serverIp=SERVER_IP, serverPort=SERVER_PORT)
-            self.logger.warn(f'Esperando conexión... ({attempt + 1}/{max_attempts})')
+            self.logger.info(f'Esperando conexión... ({attempt + 1}/{max_attempts})')
             time.sleep(1)
         
         if not self.hoverRobotComms.isRobotConnected():

@@ -57,7 +57,7 @@ class SerialClient(BaseTransport):
             elif "usb-to-serial" in descripcion:             # TODO: solo para probar en windows
                 self.SerialPort = p.device  # ejemplo: prolific usb-to-serial comm port (com9)
             else:
-                self.logger.warn(f'Puerto ignorado: {descripcion}, device: {p.device}')
+                self.logger.debug(f'Puerto ignorado: {descripcion}, device: {p.device}')
         
         if (self.SerialPort is not None):
             
