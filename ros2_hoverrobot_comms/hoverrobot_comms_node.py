@@ -356,7 +356,7 @@ class HoverRobotCommsNode(LifecycleNode):
         msg.range = value_m
         return msg
 
-    def __sanitize_range(raw_value_meters, max_range):
+    def __sanitize_range(self, raw_value_meters, max_range):
         if raw_value_meters <= 0:
             return max_range  # sin obstáculo
         return raw_value_meters
