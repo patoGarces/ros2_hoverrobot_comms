@@ -322,28 +322,33 @@ class HoverRobotCommsNode(LifecycleNode):
             collisionDistanceRearLeftInMeters = robotDynamicData.collisionRL / 10000.00
             collisionDistanceRearRightInMeters = robotDynamicData.collisionRR / 10000.00
 
-            range_msg = Range()
-            range_msg.header.stamp = now
-            range_msg.min_range = 0.03
-            range_msg.max_range = 1.00
-            range_msg.radiation_type = 0
-            range_msg.field_of_view = 0.26179
+            self.range_front_left_publisher.publish(
+                self.__publish_range("range_front_left", collisionDistanceFrontLeftInMeters, now)
+            )
 
-            range_msg.header.frame_id = 'range_front_left'
-            range_msg.range = collisionDistanceFrontLeftInMeters
-            self.range_front_left_publisher.publish(range_msg)
+            self.range_front_right_publisher.publish(
+                self.__publish_range("range_front_right", collisionDistanceFrontRightInMeters, now)
+            )
+            
+            self.range_rear_left_publisher.publish(
+                self.__publish_range("range_rear_left", collisionDistanceRearLeftInMeters, now)
+            )
+            self.range_rear_right_publisher.publish(
+                self.__publish_range("range_rear_right", collisionDistanceRearRightInMeters, now)
+            )
 
-            range_msg.header.frame_id = 'range_front_right'
-            range_msg.range = collisionDistanceFrontRightInMeters
-            self.range_front_right_publisher.publish(range_msg)
 
-            range_msg.header.frame_id = 'range_rear_left'
-            range_msg.range = collisionDistanceRearLeftInMeters
-            self.range_rear_left_publisher.publish(range_msg)
+    def __publish_range(self, frame_id, value_m, now):
+        msg = Range()
+        msg.header.stamp = now
+        msg.header.frame_id = frame_id
+        msg.min_range = 0.03
+        msg.max_range = 1.00
+        msg.radiation_type = 0
+        msg.field_of_view = 0.26179
+        msg.range = value_m
+        return msg
 
-            range_msg.header.frame_id = 'range_rear_right'
-            range_msg.range = collisionDistanceRearRightInMeters
-            self.range_rear_right_publisher.publish(range_msg)
 
     def __cmdVelCallback(self, msg):
         self.latest_linear = msg.linear.x
