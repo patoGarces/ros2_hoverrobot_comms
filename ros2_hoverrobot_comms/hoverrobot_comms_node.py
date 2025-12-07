@@ -322,6 +322,13 @@ class HoverRobotCommsNode(LifecycleNode):
             collisionDistanceRearLeftInMeters = robotDynamicData.collisionRL / 10000.00
             collisionDistanceRearRightInMeters = robotDynamicData.collisionRR / 10000.00
 
+            max_range = 1.0
+
+            collisionDistanceFrontLeftInMeters  = self.__sanitize_range(robotDynamicData.collisionFL / 10000.0, max_range)
+            collisionDistanceFrontRightInMeters = self.__sanitize_range(robotDynamicData.collisionFR / 10000.0, max_range)
+            collisionDistanceRearLeftInMeters   = self.__sanitize_range(robotDynamicData.collisionRL / 10000.0, max_range)
+            collisionDistanceRearRightInMeters  = self.__sanitize_range(robotDynamicData.collisionRR / 10000.0, max_range)
+
             self.range_front_left_publisher.publish(
                 self.__publish_range("range_front_left", collisionDistanceFrontLeftInMeters, now)
             )
@@ -349,6 +356,10 @@ class HoverRobotCommsNode(LifecycleNode):
         msg.range = value_m
         return msg
 
+    def __sanitize_range(raw_value_meters, max_range):
+        if raw_value_meters <= 0:
+            return max_range  # sin obstáculo
+        return raw_value_meters
 
     def __cmdVelCallback(self, msg):
         self.latest_linear = msg.linear.x
